@@ -1,0 +1,22 @@
+LINHA ENDEREÇO OBJETO                   FONTE
+    1                                 . Soma 2 cinco vezes. RESULT deve conter 10 (00000A).
+    2 000000                          DEMO    START 0
+    3 000000 B410                     FIRST   CLEAR X
+    4 000002 010000                           LDA #0
+    5 000005 750005                           LDT #5
+    6 000008 190002                   LOOP    ADD #2
+    7 00000B B850                             TIXR T
+    8 00000D 3B2FF8                           JLT LOOP
+    9 000010 0F2003                           STA RESULT
+   10 000013 3F2FFD                   STOP    J STOP
+   11 000016                          RESULT  RESW 1
+   12 000019                                  END FIRST
+   13                                 
+
+TABELA DE SÍMBOLOS
+NOME                 VALOR    TIPO      LINHA
+DEMO                 00000000 RELATIVO  2
+FIRST                00000000 RELATIVO  3
+LOOP                 00000008 RELATIVO  6
+RESULT               00000016 RELATIVO  11
+STOP                 00000013 RELATIVO  10

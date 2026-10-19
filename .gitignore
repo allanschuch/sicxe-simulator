@@ -1,5 +1,6 @@
 # Ignorar a pasta de compilação do Maven (onde ficam os .class e .jar gerados)
 target/
+bin/
 
 # Ignorar arquivos de configuração de IDEs (opcional, mas altamente recomendado)
 .idea/

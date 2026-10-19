@@ -37,3 +37,11 @@ O projeto utiliza o Apache Maven para a gestão de dependências e automação d
   ```bash
   mvn clean test
   ```
+
+## Montador (Segunda Etapa)
+
+O projeto também inclui um montador SIC/XE de duas passagens, integrado à máquina virtual. Na aba **Montador**, abra ou edite um `.asm`, clique em **Montar** e depois em **Carregar na VM**. Os exemplos estão em `test-programs/loop.asm`, `addressing.asm` e `literals.asm`.
+
+O resumo do funcionamento, das estruturas e dos comandos do montador está ao final da [documentação do sistema](docs/DOCUMENTATION.md#8-montador-e-carregador-segunda-etapa).
+
+No Windows, `executar.cmd` abre a aplicação. Se o Maven não estiver no PATH, use `.\maven.cmd` no lugar de `mvn` nos comandos acima. Para gerar um JAR executável, use `mvn package` e execute `java -jar target/sicxe-simulator-1.0-SNAPSHOT.jar`.

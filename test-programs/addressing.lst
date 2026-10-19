@@ -1,0 +1,32 @@
+LINHA ENDEREÇO OBJETO                   FONTE
+    1                                 . Exercita formato 4, BASE, indireção, indexação e shift.
+    2 001000                          ADDRS   START 1000
+    3 001000                          COUNT   EQU 8
+    4 001000 69102022                 FIRST   +LDB #FAR
+    5 001004                                  BASE FAR
+    6 001004 034000                           LDA FAR
+    7 001007 A407                             SHIFTL A,COUNT
+    8 001009 0F2013                           STA RESULT
+    9 00100C 050001                           LDX #1
+   10 00100F 53A009                           LDCH TEXT,X
+   11 001012 022003                           LDA @PTR
+   12 001015 3F2FFD                   STOP    J STOP
+   13 001018 002022                   PTR     WORD FAR
+   14 00101B 41623B43                 TEXT    BYTE C'Ab;C'
+   15 00101F                          RESULT  RESW 1
+   16 001022                                  RESB 4096
+   17 002022 000001                   FAR     WORD 1
+   18 002025                                  NOBASE
+   19 002025                                  END FIRST
+   20                                 
+
+TABELA DE SÍMBOLOS
+NOME                 VALOR    TIPO      LINHA
+ADDRS                00001000 RELATIVO  2
+COUNT                00000008 ABSOLUTO  3
+FAR                  00002022 RELATIVO  17
+FIRST                00001000 RELATIVO  4
+PTR                  00001018 RELATIVO  13
+RESULT               0000101F RELATIVO  15
+STOP                 00001015 RELATIVO  12
+TEXT                 0000101B RELATIVO  14
