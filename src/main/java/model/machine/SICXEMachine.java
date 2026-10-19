@@ -85,6 +85,15 @@ public class SICXEMachine {
      * Zera a memória e os registradores, preparando a CPU para a carga de um novo programa.
      */
     public void reset() {
+        resetRegisters(0);
+
+        for (int i = 0; i < Memory.MAX_MEMORY_SIZE; i++) {
+            memory.writeByte(i, 0);
+        }
+    }
+
+    /** Reinicia a execução preservando os bytes do programa e os dados em memória. */
+    public void resetRegisters(int entryPoint) {
         // Zera os registradores
         for (Register reg : Register.values()) {
             if (reg != Register.F) {
@@ -93,11 +102,7 @@ public class SICXEMachine {
         }
         registers.setConditionCode(ConditionCode.NONE);
         
-        // Zera a memória
-        for (int i = 0; i < Memory.MAX_MEMORY_SIZE; i++) {
-            memory.writeByte(i, 0);
-        }
-        
+        registers.setPC(entryPoint);
         this.lastExecutedInstruction = null;
     }
 

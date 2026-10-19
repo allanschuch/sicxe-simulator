@@ -58,6 +58,9 @@ public class InstructionDecoder {
         
         int r1Code = (byte2 >> 4) & DISPLACEMENT_HIGH_NIBBLE_MASK;
         int r2Code = byte2 & DISPLACEMENT_HIGH_NIBBLE_MASK;
+        if (opcode == Opcode.SHIFTL || opcode == Opcode.SHIFTR) {
+            return DecodedInstruction.shift(opcode, Register.fromCode(r1Code), r2Code + 1);
+        }
         
         return new DecodedInstruction(
             opcode, 
