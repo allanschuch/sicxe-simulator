@@ -54,7 +54,8 @@ public class Executor {
             case LDT: executeLoad(Register.T, inst, targetAddress); break;
             case LDCH:
                 // LDCH afeta apenas o byte mais à direita do Acumulador.
-                int charToLoad = memory.readByte(targetAddress);
+                int charToLoad = inst.getAddressingMode() == AddressingMode.IMMEDIATE
+                        ? targetAddress & 0xFF : memory.readByte(targetAddress);
                 Word24 currentA = registers.get(Register.A);
                 registers.set(Register.A, currentA.withLowByte(charToLoad));
                 break;
@@ -105,7 +106,7 @@ public class Executor {
                 break;
             case SHIFTL:
             case SHIFTR:
-                executeShift(op, inst.getR1(), inst.getR2());
+                executeShift(op, inst.getR1(), inst.getShiftCount());
                 break;
 
             // ==========================================
@@ -213,8 +214,7 @@ public class Executor {
      * Executa deslocamentos de bits. 
      * Pela especificação, o número de bits (n) é guardado em formato n-1 no lugar do registrador r2.
      */
-    private void executeShift(Opcode op, Register r1, Register r2) {
-        int n = r2.getCode() + 1; // Extrai (n - 1) do r2 e converte para n real
+    private void executeShift(Opcode op, Register r1, int n) {
         Word24 val1 = registers.get(r1);
         
         Word24 result = (op == Opcode.SHIFTL) ? val1.shiftLeftCircular(n) : val1.shiftRightArithmetic(n);

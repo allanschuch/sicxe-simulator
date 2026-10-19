@@ -1,0 +1,15 @@
+. Literais, expressão absoluta e ORG com restauração.
+LITS    START 0
+SIZE    EQU FINISH-BUFFER
+FIRST   LDCH =C'A'
+        J NEXT
+        LTORG
+NEXT    LDA #SIZE
+        STA BUFFER
+STOP    J STOP
+BUFFER  RESB 12
+FINISH  EQU *
+        ORG 0x100
+TABLE   BYTE X'00112233445566778899AABBCCDDEEFF'
+        ORG
+        END FIRST

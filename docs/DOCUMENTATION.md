@@ -1,8 +1,8 @@
 # Documentação do Sistema SIC/XE
-**Módulo:** Simulador da Máquina Virtual (Core)
+**Módulos:** Máquina Virtual, Montador de Duas Passagens e Carregador
 
 ## Visão Geral da Arquitetura (Padrão MVC)
-O sistema implementa o padrão MVC. A Máquina Virtual (Modelo) expõe o estado da memória, dos registradores e os métodos de controle de ciclo (como `step()`), sem possuir acoplamento com bibliotecas gráficas. O Controller orquestra a execução e interage com a Interface Gráfica (View) sem bloquear a Thread da interface. Esta estrutura arquitetural viabiliza a integração modular de futuros componentes, como o Montador e o Ligador.
+O sistema implementa o padrão MVC. A Máquina Virtual (Modelo) expõe o estado da memória, dos registradores e os métodos de controle de ciclo (como `step()`), sem possuir acoplamento com bibliotecas gráficas. O Controller orquestra a execução e interage com a Interface Gráfica (View) sem bloquear a Thread da interface. Esta estrutura arquitetural permite integrar o Montador e o Carregador e acrescentar futuramente outros componentes, como o Ligador.
 
 ---
 
@@ -33,6 +33,13 @@ O sistema implementa o padrão MVC. A Máquina Virtual (Modelo) expõe o estado 
 * **MÓDULO 3: View**
   * **7. Pacote `view`: Interface Gráfica**
     * 7.1. Classe `SICXEView`
+* **MÓDULO 4: Montador e Carregador**
+  * **8. Montador e Carregador (Segunda Etapa)**
+    * 8.1. Montagem em duas passagens
+    * 8.2. Estruturas e responsabilidades
+    * 8.3. Linguagem e programa objeto
+    * 8.4. Uso e integração com a máquina virtual
+    * 8.5. Exemplos, testes e limites
 
 ---
 
@@ -99,7 +106,7 @@ O Banco de Registradores unifica o estado dos registradores primários da CPU em
 Isola a lógica responsável por interpretar os bytes lidos da memória, transformar bits isolados em estruturas tipadas e alimentar a unidade de execução.
 
 ### 1.3.1. Classe `DecodedInstruction`
-Atua como um contêiner de dados (DTO) imutável que centraliza as propriedades decodificadas de uma instrução lida.
+Atua como um contêiner de dados (DTO) que centraliza as propriedades decodificadas de uma instrução lida. Inclui contagem numérica para shifts e informações de execução para visualização.
 
 *   **Separação de Formatos:** Possui construtores distintos para acomodar a discrepância estrutural entre instruções. O construtor de Formato 2 inicializa exclusivamente os parâmetros de registradores (`r1` e `r2`). O construtor de Formatos 3 e 4 inicializa o modo de endereçamento, as flags de cálculo de endereço (`x`, `b`, `p`, `e`) e o valor de deslocamento/endereço, definindo os parâmetros do Formato 2 como nulos.
 *   **Facilitador de Álgebra Relativa:** O método `getSignedDisplacement()` acessa o valor cru de deslocamento extraído (12 bits) e o retorna encapsulado através de `Word24.fromSigned12Bit()`. Isso entrega para a unidade de controle o valor pronto com o sinal estendido, essencial para a adição aritmética correta no endereçamento relativo ao PC.
@@ -107,7 +114,7 @@ Atua como um contêiner de dados (DTO) imutável que centraliza as propriedades 
 ### 1.3.2. Classe `InstructionDecoder`
 Responsável pela leitura crua da memória e extração estruturada das flags lógicas e operandos, delegando o resultado para a instanciação de um objeto `DecodedInstruction`.
 
-*   **Decodificação de Formato 2:** Para instruções de 2 bytes, a classe lê o segundo byte da memória e aplica operações de deslocamento de bits (`>>`) aliadas à constante `DISPLACEMENT_HIGH_NIBBLE_MASK` (`0x0F`) para extrair e mapear isoladamente os nibbles (4 bits) correspondentes aos registradores `r1` e `r2`.
+*   **Decodificação de Formato 2:** Extrai os dois nibbles de quatro bits do segundo byte. Em operações comuns, são códigos de registradores; para `SHIFTL/SHIFTR`, o segundo nibble representa `n-1` e gera uma contagem numérica, inclusive para valores que não correspondem a registradores.
 *   **Extração de Flags (Formatos 3 e 4):** A identificação das diretrizes de endereçamento é feita via máscaras bit a bit (`&`). A classe extrai as flags `n` e `i` a partir dos dois bits menos significativos do primeiro byte (`FLAG_N_MASK`, `FLAG_I_MASK`), e as flags `x`, `b`, `p` e `e` a partir dos quatro bits mais significativos do segundo byte lido.
 *   **Concatenação de Endereços/Deslocamentos:**
     *   **Formato 4:** Ativado quando a flag `e` é verdadeira. O decodificador consome 4 bytes da memória e concatena os 4 bits inferiores do segundo byte com os 16 bits dos bytes três e quatro. Este processo utiliza deslocamentos lógicos (`<<`) e operadores OR (`|`), resultando no endereço absoluto de 20 bits.
@@ -131,7 +138,7 @@ Representa a Unidade Lógica, Aritmética e de Execução (ALU). Processa o DTO 
 *   **Busca de Operandos Dinâmica:** O método interno `fetchOperand()` interroga o modo de endereçamento. Para o modo Imediato (`n=0, i=1`), encapsula diretamente o TA computado em uma `Word24`. Para os demais casos, efetua a leitura da palavra correspondente na memória principal.
 *   **Movimentação e Manipulação de Bytes:** Executa transferências diretas de Load e Store em nível de palavra (`LDA`, `STA`). Nas instruções específicas de caractere (`LDCH`, `STCH`), utiliza os métodos de precisão isolada (`withLowByte()`, `getLowByte()`) para interagir restritamente com o último byte, preservando o restante da estrutura.
 *   **Aritmética e Tratamento de Complemento de 2:** Delega as operações matemáticas para o controle interno da classe `Word24`. A conversão nativa para `toIntSigned()` blinda a aritmética de 24 bits, assegurando o comportamento correto perante valores negativos pela JVM. Operações de `DIV` ou `DIVR` por zero acionam uma `ArithmeticException`.
-*   **Deslocamento em Registradores (Shift):** Para as instruções `SHIFTL` e `SHIFTR`, o executor converte o identificador de r2 (armazenado como `n-1`) de volta para o número real de saltos `n` antes de invocar a translação de bits.
+*   **Deslocamento em Registradores (Shift):** Para `SHIFTL` e `SHIFTR`, o decoder interpreta o segundo nibble como `n-1` e entrega uma contagem numérica de 1 a 16 em `DecodedInstruction.getShiftCount()`. O executor usa essa contagem, sem convertê-la para um registrador. A interface também apresenta a contagem.
 *   **Controle de Fluxo e Subrotinas:** A classe altera o fluxo de execução manipulando diretamente o registrador PC. Comparações (`COMP`, `COMPR`) fixam o novo estado no `ConditionCode`. Saltos condicionais (`JEQ`, `JLT`, `JGT`) avaliam este código para deferir ou ignorar o salto. Subrotinas (`JSUB`) registram o estado atual do PC no registrador de ligação (`L`) antes de executar o salto, permitindo a retomada exata na instrução de retorno (`RSUB`). 
 
 ## 1.5. Pacote `machine`: Fachada e Controle da Máquina
@@ -168,10 +175,10 @@ Contrato baseado no padrão *Observer* para comunicação assíncrona e desacopl
 ### 6.2. Classe `MachineController`
 Encapsula as interações com a `SICXEMachine` e gerencia o controle de concorrência da simulação.
 
-*   **Execução Contínua (`run` e `pause`):** O método `run()` aloca uma Thread *daemon* dedicada a um laço de repetição de ciclos de máquina. A variável de controle `running` é qualificada como `volatile`, o que obriga a leitura direta da memória principal; isso garante que a interrupção disparada pelo método `pause()` seja enxergada instantaneamente pela Thread em background, interrompendo a simulação de forma *thread-safe*.
+*   **Execução Contínua (`run` e `pause`):** `run()` cria uma thread daemon dedicada. Um lock protege os ciclos, a carga e o reset. Cada ciclo verifica se sua thread ainda é a execução ativa, impedindo que uma execução antiga continue depois de uma pausa e nova carga. `pause()` interrompe a thread, e o intervalo de execução usa uma variável `volatile`.
 *   **Avanço Único (`step`):** Executa o ciclo lógico da máquina protegido por um bloco `try-catch`. Em caso de exceção de hardware, o controlador executa um `pause()` preventivo e propaga o erro formatado — incluindo o estado atual do registrador PC — através do *listener*.
-*   **Reset Lógico (`reset`):** Aplica a reinicialização restrita aos registradores operacionais (A, X, L, B, S, T) e ao PC. O `reset` do Controller não apaga a memória, preservando intencionalmente o último programa (código objeto) carregado para novas execuções.
-*   **Carregador Temporário (`loadHexCode`):** Utilitário embutido para testes de execução. Recebe uma string contendo código hexadecimal, sanitiza a entrada removendo espaços e quebras de linha, valida a paridade de caracteres e escreve as instruções byte a byte na memória a partir do endereço `0x0000`.
+*   **Reset Lógico (`reset`):** Usa `SICXEMachine.resetRegisters(entryPoint)` para limpar registradores, código de condição e última instrução, preservando a memória. O PC volta ao ponto de entrada do último programa carregado, inclusive após relocação. Os dados modificados pela execução também são preservados; recarregar o objeto restaura sua imagem inicial.
+*   **Carga (`loadProgram`, `loadObjectCode`, `loadAssembly`):** O controller usa `ObjectLoader` para validar e relocar os registros H/T/M/E em uma imagem temporária, carregar memória e configurar a entrada. Entradas inválidas preservam a memória. `loadHexCode` permanece como utilitário de testes a partir de zero, mas aceita somente dígitos hexadecimais completos e espaços; não remove outros caracteres silenciosamente.
 
 ## MÓDULO 3: View
 
@@ -187,3 +194,64 @@ Atua como a interface principal do simulador, assinando os eventos do Controller
 *   **Thread Safety (`invokeLater`):** Como o Controller executa a simulação em uma Thread separada (background), todas as atualizações visuais disparadas pelos eventos de estado e de erro são repassadas ao `SwingUtilities.invokeLater`. Isso garante que a renderização ocorra estritamente na *Event Dispatch Thread* (EDT) do Swing, prevenindo anomalias e travamentos na interface.
 *   **Rastreamento do PC:** Durante a atualização de estado (`onMachineStateChanged`), a View extrai o valor atual do Program Counter (PC) e força a barra de rolagem da tabela de memória a focar e selecionar a linha correspondente, permitindo o acompanhamento visual da execução.
 *   **Delegação de Controles:** Os botões (Step, Run, Pause, Reset, Load) delegam a ação imediatamente aos métodos correspondentes do Controller. A interface não possui lógicas de negócio, atuando apenas como acionadora.
+
+---
+
+## MÓDULO 4: Montador e Carregador
+
+## 8. Montador e Carregador (Segunda Etapa)
+
+A segunda etapa acrescenta a tradução de programas assembly para o código de máquina executado pelo simulador da primeira etapa. Foram mantidos a arquitetura MVC, o conjunto de 37 instruções, os tipos de registradores e a memória existentes. Os novos serviços ficam nos pacotes `assembler` e `loader`, e o painel de montagem permanece no pacote `view`.
+
+### 8.1. Montagem em duas passagens
+
+* **Primeira passagem:** `TwoPassAssembler` interpreta as linhas, calcula os tamanhos de instruções e dados, atualiza o contador de localização (LOCCTR) em bytes e constrói as tabelas de símbolos e literais. Também identifica rótulos repetidos e mantém linhas intermediárias com seus endereços.
+* **Segunda passagem:** resolve referências aos símbolos, codifica instruções e constantes e produz objeto, listagem e diagnósticos por linha. Símbolos indefinidos e operandos inválidos impedem a emissão de um objeto executável. Cada montagem usa uma sessão independente.
+
+### 8.2. Estruturas e responsabilidades
+
+| Componente | Responsabilidade |
+| --- | --- |
+| `SourceParser` / `SourceLine` | Separar rótulo, operação e operando, preservando fonte e número de linha. |
+| `TwoPassAssembler` | Coordenar as duas passagens, endereços, símbolos, reservas e literais. |
+| `Symbol` / `ExpressionEvaluator` / `Constants` | Representar símbolos e avaliar expressões e constantes, distinguindo valores absolutos e relativos. |
+| `InstructionEncoder` | Reutilizar `Opcode` e `Register` para gerar formatos, flags e deslocamentos. |
+| `ObjectProgram` | Validar e ler/escrever os registros objeto H/T/M/E. |
+| `AssemblyResult` / `ListingLine` / `Diagnostic` | Reunir objeto, listagem, símbolos e erros da montagem. |
+| `ObjectLoader` | Validar a carga e a relocação antes de alterar a máquina. |
+| `AssemblerPanel` / `AssemblerCli` | Disponibilizar a montagem pela interface Swing e pelo terminal. |
+
+### 8.3. Linguagem e programa objeto
+
+A sintaxe usa formato livre: `[ROTULO[:]] OPERACAO [OPERANDO] [; comentário]`. Rótulos e operações não diferenciam maiúsculas de minúsculas; constantes de caracteres preservam o conteúdo. Linhas vazias e comentários iniciados por `.` são ignorados. Números são decimais ou hexadecimais com `0x`; a exceção é `START`, sempre hexadecimal.
+
+São aceitos os formatos 2, 3 e 4, com `+` explícito para o formato 4. O endereçamento pode ser simples, imediato (`#`), indireto (`@`) ou indexado (`,X`). Para símbolos relativos em formato 3, tenta-se PC-relativo (-2048 a 2047) e depois base-relativo (0 a 4095); fora dessas faixas, é necessário usar `+` ou uma base adequada. `BASE` informa um valor ao montador, mas o programa precisa carregar o registrador B.
+
+| Diretivas | Função |
+| --- | --- |
+| `START` / `END` | Definir a origem e encerrar o fonte, indicando opcionalmente a entrada. Sem `START`, a origem é zero; `END` é obrigatório. |
+| `BYTE` / `WORD` | Emitir caracteres ASCII ou bytes hexadecimais (`C'...'` / `X'...'`) e palavras de 24 bits. |
+| `RESB` / `RESW` | Reservar bytes ou palavras de três bytes, sem emitir dados. |
+| `BASE` / `NOBASE` | Habilitar ou remover a base assumida pelo montador. |
+| `EQU` / `ORG` | Definir símbolos por expressão e alterar/restaurar o contador de localização, sem sobrepor áreas alocadas. |
+| `LTORG` | Alocar literais pendentes, como `=C'EOF'` e `=X'05'`; `END` também aloca os restantes. |
+
+Expressões aceitam `+`, `-`, `*`, `/`, parênteses e `*` como localização corrente. `EQU` admite referências futuras; expressões que afetam reservas ou `ORG` precisam estar resolvidas quando encontradas.
+
+O objeto contém cabeçalho **H**, trechos de bytes **T** (até 30 bytes), modificações para relocação **M** e entrada **E**. Reservas e lacunas são preservadas. A posição de M é relativa ao início do programa; o carregador ajusta os campos indicados pela diferença entre origem de carga e origem de montagem, preservando as flags do formato 4. Uma carga inválida mantém o conteúdo anterior da memória.
+
+### 8.4. Uso e integração com a máquina virtual
+
+Na aba **Montador**, abra ou edite um `.asm`, clique em **Montar** e consulte **Listagem e símbolos**, **Objeto** e **Erros**. Uma montagem válida permite salvar `.obj` e `.lst` ou usar **Carregar na VM**, informando a origem em hexadecimal. Editar o fonte invalida o resultado anterior. **Abrir objeto** permite carregar um `.obj` existente.
+
+Pelo terminal, após `mvn compile`, execute `java -cp target/classes assembler.AssemblerCli test-programs/loop.asm [prefixo-de-saida]`. São gerados objeto e listagem; em caso de erro, apenas a listagem é atualizada. Um `.obj` antigo não é apagado: use o objeto somente se a execução atual terminar com sucesso. Para gerar e executar o JAR, use `mvn package` e `java -jar target/sicxe-simulator-1.0-SNAPSHOT.jar`. No Windows, `executar.cmd` abre a aplicação e `maven.cmd` localiza o Maven instalado.
+
+As adaptações da etapa 1 estão em `MachineController`, `SICXEView`, `DecodedInstruction`, `InstructionDecoder`, `Executor` e `SICXEMachine`. Elas integram montagem e carga, preservam a entrada no reset, representam corretamente a contagem dos shifts e corrigem `LDCH` imediato. **Reset** limpa registradores e restaura a entrada, preservando a memória; recarregar o objeto restaura os dados iniciais. `END` encerra a montagem e não representa uma instrução de parada da CPU.
+
+### 8.5. Exemplos, testes e limites
+
+Os fontes de exemplo ficam em `test-programs`: `loop.asm` calcula 10 após 19 instruções; `addressing.asm` exercita endereçamento, formato 4, base e shift, produzindo 256 após oito instruções; `literals.asm` demonstra literais, `LTORG`, `EQU` e `ORG`.
+
+A suíte possui 44 testes, incluindo o teste original da máquina e testes de codificação, símbolos, erros, limites PC/base, expressões, literais, objeto, relocação, carga, reset, terminal e painel gráfico. Execute `mvn test` ou `.\maven.cmd test` no Windows.
+
+O escopo utiliza as instruções da VM da primeira etapa. Não inclui modo SIC clássico (`n=i=0`), macros, blocos `USE`, múltiplas seções `CSECT` ou ligação externa `EXTDEF`/`EXTREF`. O fonte deve conter pelo menos uma instrução executável. Como não há `HALT` nesse subconjunto, os exemplos usam um laço final e a execução pode ser interrompida com **Pause**.

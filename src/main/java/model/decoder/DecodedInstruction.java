@@ -17,6 +17,7 @@ public class DecodedInstruction {
     // Campos exclusivos do Formato 2
     private final Register r1;
     private final Register r2;
+    private int shiftCount;
     
     // Campos exclusivos dos Formatos 3 e 4
     private final AddressingMode addressingMode;
@@ -88,6 +89,16 @@ public class DecodedInstruction {
     public int getFormat() { return format; }
     public Register getR1() { return r1; }
     public Register getR2() { return r2; }
+    public int getShiftCount() { return shiftCount; }
+
+    /** O segundo nibble de SHIFTL/SHIFTR é uma contagem n-1, não um registrador. */
+    public static DecodedInstruction shift(Opcode opcode, Register register, int count) {
+        if ((opcode != Opcode.SHIFTL && opcode != Opcode.SHIFTR) || count < 1 || count > 16)
+            throw new IllegalArgumentException("Instrução ou contagem de shift inválida.");
+        DecodedInstruction instruction = new DecodedInstruction(opcode, register, null);
+        instruction.shiftCount = count;
+        return instruction;
+    }
     public AddressingMode getAddressingMode() { return addressingMode; }
     public boolean isIndexed() { return flagX; }
     public boolean isBaseRelative() { return flagB; }

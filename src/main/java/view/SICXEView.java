@@ -30,6 +30,7 @@ public class SICXEView extends JFrame implements MachineStateListener {
     private RegisterTableModel registerModel;
     private JSlider speedSlider;
     private JTextArea instructionDetailsArea; // Painel de Detalhes da Instrução
+    private final JPanel machinePanel = new JPanel(new BorderLayout(10, 10));
 
     /**
      * Constrói e inicializa os componentes visuais do simulador.
@@ -51,6 +52,10 @@ public class SICXEView extends JFrame implements MachineStateListener {
         setLayout(new BorderLayout(10, 10));
 
         initComponents();
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Montador", new AssemblerPanel(controller, () -> tabs.setSelectedIndex(1)));
+        tabs.addTab("Máquina virtual", machinePanel);
+        add(tabs, BorderLayout.CENTER);
     }
 
     /**
@@ -85,7 +90,7 @@ public class SICXEView extends JFrame implements MachineStateListener {
         detailsScroll.setBorder(BorderFactory.createTitledBorder("Instruction Details (Last Executed)"));
         leftPanel.add(detailsScroll, BorderLayout.CENTER); // Preenche automaticamente o restante do espaço
 
-        add(leftPanel, BorderLayout.WEST);
+        machinePanel.add(leftPanel, BorderLayout.WEST);
 
         // --- 2. PAINEL CENTRAL (Memória com Legenda) ---
         JPanel centerPanel = new JPanel(new BorderLayout());
@@ -117,7 +122,7 @@ public class SICXEView extends JFrame implements MachineStateListener {
         memoryScroll.setBorder(BorderFactory.createTitledBorder("Main Memory (1MB)"));
         centerPanel.add(memoryScroll, BorderLayout.CENTER);
         
-        add(centerPanel, BorderLayout.CENTER);
+        machinePanel.add(centerPanel, BorderLayout.CENTER);
 
         // --- 3. PAINEL DE CONTROLES (Inferior) ---
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
@@ -157,7 +162,7 @@ public class SICXEView extends JFrame implements MachineStateListener {
         controlPanel.add(new JLabel("Speed:"));
         controlPanel.add(speedSlider);
 
-        add(controlPanel, BorderLayout.SOUTH);
+        machinePanel.add(controlPanel, BorderLayout.SOUTH);
         
         updateInstructionDetails(); // Renderiza texto vazio inicialmente
     }
@@ -239,12 +244,12 @@ public class SICXEView extends JFrame implements MachineStateListener {
             String opBin = String.format("%8s", Integer.toBinaryString(rawOpcode)).replace(' ', '0');
             
             int r1Num = getRegisterNumber(inst.getR1());
-            int r2Num = getRegisterNumber(inst.getR2());
+            int r2Num = inst.getShiftCount() > 0 ? inst.getShiftCount() - 1 : getRegisterNumber(inst.getR2());
             String r1Bin = String.format("%4s", Integer.toBinaryString(r1Num)).replace(' ', '0');
             String r2Bin = String.format("%4s", Integer.toBinaryString(r2Num)).replace(' ', '0');
             
             String r1Str = String.format("%s (%s)", r1Bin, inst.getR1() != null ? inst.getR1().name() : "-");
-            String r2Str = String.format("%s (%s)", r2Bin, inst.getR2() != null ? inst.getR2().name() : "-");
+            String r2Str = String.format("%s (%s)", r2Bin, inst.getShiftCount() > 0 ? "n=" + inst.getShiftCount() : inst.getR2() != null ? inst.getR2().name() : "-");
             
             sb.append(String.format("[%8s] [%-10s] [%-10s]\n", opBin, r1Str, r2Str));
             
