@@ -1,0 +1,31 @@
+LINHA ENDEREÇO OBJETO                   FONTE
+    1                                 . Macros: chamada aninhada (INIT chama CLRREG) e definição aninhada (MKADD define ADDK).
+    2                                 . A = 3 + 10 + 4 = 17 depois de cinco instruções; o resultado fica em RESULT.
+    3 000000                          MACROS  START 0
+    4                                 
+    5                                 
+    6                                 
+    7                                 
+    8                                 
+    9                                 . FIRST   INIT 3
+   10 000000                          FIRST EQU *
+   11                                 .   CLRREG X
+   12 000000 B410                             CLEAR X
+   13 000002 010003                           LDA #3
+   14                                 . MKADD 10
+   15                                 . ADDK 4
+   16 000005 19000A                           ADD #10
+   17 000008 190004                           ADD #4
+   18                                 . SAVE A,RESULT
+   19 00000B 0F2003                           STA RESULT
+   20 00000E 3F2FFD                   STOP    J STOP
+   21 000011                          RESULT  RESW 1
+   22 000014                                  END FIRST
+   23                                 
+
+TABELA DE SÍMBOLOS
+NOME                 VALOR    TIPO      LINHA
+FIRST                00000000 RELATIVO  10
+MACROS               00000000 RELATIVO  3
+RESULT               00000011 RELATIVO  21
+STOP                 0000000E RELATIVO  20

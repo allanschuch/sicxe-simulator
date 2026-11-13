@@ -6,8 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Ponto de entrada do montador pelo terminal, sem iniciar a interface gráfica.
+ * Ponto de entrada do macro-montador pelo terminal, sem iniciar a interface gráfica.
  * Uso: assembler.AssemblerCli fonte.asm [prefixo-de-saida].
+ * Gera MASMAPRG.ASM (fonte expandido) na pasta do fonte, além do objeto e da listagem.
  */
 public final class AssemblerCli {
 
@@ -38,17 +39,28 @@ public final class AssemblerCli {
         try {
             Path input = Path.of(args[0]);
             String prefix = args.length == 2 ? args[1] : input.toString().replaceFirst("\\.[^.\\\\/]+$", "");
-            AssemblyResult result = new TwoPassAssembler().assemble(Files.readString(input, StandardCharsets.UTF_8));
+            // O macro-montador expande as macros, grava MASMAPRG.ASM ao lado do fonte e monta o resultado.
+            Path directory = input.toAbsolutePath().getParent();
+            MacroAssemblyResult macroResult = new MacroAssembler().assemble(Files.readString(input, StandardCharsets.UTF_8),
+                    directory);
+            AssemblyResult result = macroResult.getAssembly();
             Path listing = Path.of(prefix + ".lst");
             Files.writeString(listing, result.getListing(), StandardCharsets.UTF_8);
             if (!result.isSuccess()) {
                 result.getDiagnostics().forEach(d -> System.err.println(d));
-                System.err.println("Montagem falhou. Listagem: " + listing + ". Nenhum objeto novo foi emitido.");
+                if (!macroResult.getExpansion().isSuccess()) {
+                    System.err.println("Expansão de macros falhou (linhas do fonte original). Nenhum "
+                            + MacroAssembler.EXPANDED_FILE_NAME + " novo foi emitido.");
+                } else {
+                    System.err.println("Montagem falhou (linhas de " + MacroAssembler.EXPANDED_FILE_NAME + ").");
+                }
+                System.err.println("Listagem: " + listing + ". Nenhum objeto novo foi emitido.");
                 return 1;
             }
             Path object = Path.of(prefix + ".obj");
             Files.writeString(object, result.getObjectCode(), StandardCharsets.UTF_8);
-            System.out.println("Montagem concluída: " + object + " e " + listing);
+            System.out.println("Montagem concluída: " + object + " e " + listing + ". Fonte expandido: "
+                    + macroResult.getExpandedFile());
             return 0;
         } catch (IOException | IllegalArgumentException e) {
             System.err.println("Falha: " + e.getMessage());
