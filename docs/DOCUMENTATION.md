@@ -254,4 +254,66 @@ Os fontes de exemplo ficam em `test-programs`: `loop.asm` calcula 10 após 19 in
 
 A suíte possui 44 testes, incluindo o teste original da máquina e testes de codificação, símbolos, erros, limites PC/base, expressões, literais, objeto, relocação, carga, reset, terminal e painel gráfico. Execute `mvn test` ou `.\maven.cmd test` no Windows.
 
-O escopo utiliza as instruções da VM da primeira etapa. Não inclui modo SIC clássico (`n=i=0`), macros, blocos `USE`, múltiplas seções `CSECT` ou ligação externa `EXTDEF`/`EXTREF`. O fonte deve conter pelo menos uma instrução executável. Como não há `HALT` nesse subconjunto, os exemplos usam um laço final e a execução pode ser interrompida com **Pause**.
+O escopo utiliza as instruções da VM da primeira etapa. Não inclui modo SIC clássico (`n=i=0`), blocos `USE`, múltiplas seções `CSECT` ou ligação externa `EXTDEF`/`EXTREF`. O fonte deve conter pelo menos uma instrução executável. Como não há `HALT` nesse subconjunto, os exemplos usam um laço final e a execução pode ser interrompida com **Pause**.
+
+---
+
+## MÓDULO 5: Processador de Macros
+
+## 9. Processador de Macros (Terceira Etapa)
+
+O processamento de macros ocorre **antes da montagem** e em **uma única passagem**. O módulo integrador `MacroAssembler` recebe o fonte, aciona o `MacroProcessor`, grava o resultado em **`MASMAPRG.ASM`** e entrega esse fonte expandido ao `TwoPassAssembler`, que permanece inalterado. Aceita **definições aninhadas** (macro definida dentro de macro) e **chamadas aninhadas** (macro chamada dentro de macro).
+
+### 9.1. Sintaxe
+
+```
+NOME    MACRO  &P1,&P2,...     ; abre a definição (o nome vai no campo de rótulo)
+        ...corpo...
+        MEND                   ; fecha a definição
+[ROTULO] NOME  arg1,arg2,...   ; chamada
+```
+
+* Nomes de macro e parâmetros não diferenciam maiúsculas de minúsculas. Parâmetros começam com `&`.
+* O parâmetro pode vir colado a um texto, como em `ST&REG &MEM` (com `REG=A` resulta em `STA`).
+* Argumentos são separados por vírgula; vírgulas dentro de aspas ou parênteses não separam (`C'A,B'`, `(1+2)`). Argumentos ausentes ficam vazios; argumentos em excesso são erro.
+* Uma macro precisa ser definida antes de ser chamada (consequência da passagem única). Um nome de macro não pode coincidir com instrução ou diretiva (`ADD`, `START`, `MEND`...).
+* Um rótulo na linha de chamada vira `ROTULO EQU *` imediatamente antes da expansão, marcando o seu início.
+* Comentários do corpo (linhas iniciadas por `.` e trechos após `;`) não entram na expansão.
+
+### 9.2. Algoritmo e estruturas (Beck, seção 4.3)
+
+| Estrutura | Papel |
+| --- | --- |
+| `NAMTAB` | Nome da macro, parâmetros e posições inicial e final do corpo em `DEFTAB`. |
+| `DEFTAB` | Corpos das macros, com os parâmetros trocados por notação posicional (marca interna exibida como `?n`). |
+| `ARGTAB` | Argumentos da expansão em curso; cada expansão ativa mantém o seu, junto com um ponteiro para `DEFTAB`. |
+
+* **`GETLINE`:** lê do arquivo; durante uma expansão, lê de `DEFTAB` do quadro de expansão ativo e troca `?n` pelos argumentos.
+* **`PROCESSLINE`:** se a operação está em `NAMTAB` chama `EXPAND`; se é `MACRO` chama `DEFINE`; `MEND` solto é erro; qualquer outra linha vai para a saída.
+* **`DEFINE`:** copia as linhas para `DEFTAB` até o `MEND` correspondente, contando `MACRO`/`MEND` para saber o nível. **Definições aninhadas** funcionam porque o corpo é guardado sem ser interpretado: a macro interna só é definida quando a externa é expandida e o `GETLINE` entrega a linha `MACRO` ao `PROCESSLINE`. Os parâmetros da externa usados na interna são substituídos na definição da externa (a interna os "captura"); parâmetros da própria interna ficam como `&NOME` até ela ser definida, então um parâmetro interno com o mesmo nome de um externo o oculta.
+* **`EXPAND`:** empilha um quadro com os argumentos, escreve a chamada como comentário (`. NOME args`, com recuo pela profundidade) e processa cada linha do corpo com `PROCESSLINE`. **Chamadas aninhadas** funcionam porque uma linha do corpo que chama outra macro dispara outro `EXPAND` com o seu próprio quadro.
+* Cada vez que a macro externa é expandida, a interna é definida de novo. Redefinir é permitido durante uma expansão; no nível do fonte, definir duas vezes o mesmo nome é erro.
+
+### 9.3. Erros detectados
+
+MEND sem MACRO; MACRO sem MEND; macro definida duas vezes; nome reservado, ausente ou inválido; parâmetro inválido ou repetido; argumentos em excesso; **chamada recursiva** (direta ou indireta, pois não há montagem condicional para terminá-la); expansão acima de `MacroProcessor.MAX_OUTPUT_LINES` (100000 linhas). Erros de macro usam a numeração do **fonte original** e, dentro de uma expansão, indicam a cadeia (`[expansão de A > B]`). Com erro de macro, não há montagem e `MASMAPRG.ASM` não é gravado nem substituído. Erros de montagem usam a numeração de `MASMAPRG.ASM`, que é o fonte que a listagem mostra.
+
+### 9.4. Uso
+
+* **Terminal:** `java -cp target/classes assembler.AssemblerCli test-programs/macros.asm`. Gera `MASMAPRG.ASM` na pasta do fonte, além de `.obj` e `.lst`.
+* **Interface:** a aba **Montador** passa a expandir as macros ao clicar em **Montar**, e grava `MASMAPRG.ASM` na pasta do fonte aberto (ou na pasta de execução, se o fonte não veio de um arquivo). As abas **Fonte expandido** e **Macros (NAMTAB/DEFTAB)** mostram o resultado e o estado final das tabelas.
+* Fontes sem macros produzem um `MASMAPRG.ASM` idêntico ao fonte, e o objeto é o mesmo de antes.
+
+### 9.5. Classes e testes
+
+| Componente | Responsabilidade |
+| --- | --- |
+| `MacroAssembler` | Módulo integrador: expande, grava `MASMAPRG.ASM` e monta. |
+| `MacroProcessor` / `MacroResult` | Processamento de macros em uma passagem; fonte expandido, erros e tabelas. |
+| `MacroAssemblyResult` | Reúne a expansão, o arquivo gravado e o `AssemblyResult`. |
+
+`MachineController.assembleWithMacros`, `AssemblerCli` e `AssemblerPanel` passaram a usar o integrador; `TwoPassAssembler` não foi alterado. `MacroTest` e os novos casos de `AssemblerCliTest` e `AssemblerPanelTest` cobrem expansão simples, chamadas e definições aninhadas (inclusive em três níveis e com parâmetros de mesmo nome), redefinição, rótulo de chamada, erros, limite de expansão e a execução do exemplo `test-programs/macros.asm` na máquina virtual (resultado 17).
+
+### 9.6. Limites
+
+Não há montagem condicional (`AIF`/`AGO`), parâmetros por palavra-chave, operador de concatenação `->` nem geração automática de rótulos únicos: um corpo que define rótulo e é expandido duas vezes gera "símbolo definido mais de uma vez" no montador. Os argumentos são texto, sem avaliação de expressões.

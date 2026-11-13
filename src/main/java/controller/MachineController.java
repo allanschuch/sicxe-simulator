@@ -1,10 +1,14 @@
 package controller;
 
 import assembler.AssemblyResult;
+import assembler.MacroAssembler;
+import assembler.MacroAssemblyResult;
 import assembler.ObjectProgram;
 import assembler.TwoPassAssembler;
 import loader.ObjectLoader;
 import model.machine.SICXEMachine;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Controlador da Máquina Virtual SIC/XE e da integração com o montador.
@@ -21,6 +25,8 @@ public class MachineController {
     // Intervalo em milissegundos compartilhado com a Thread de execução.
     private volatile int delayMs = 100;
     private int entryPoint;
+    // Pasta de MASMAPRG.ASM quando o fonte não veio de um arquivo; por padrão, a pasta de trabalho.
+    private volatile Path macroOutputDirectory = Path.of("");
 
     /**
      * Constrói o controlador injetando o núcleo da máquina virtual.
@@ -61,6 +67,22 @@ public class MachineController {
     public AssemblyResult assemble(String source) {
         return new TwoPassAssembler().assemble(source);
     }
+
+    /**
+     * Processa as macros do fonte, grava MASMAPRG.ASM e monta o resultado, sem tocar na máquina virtual.
+     *
+     * @param source Fonte com ou sem macros.
+     * @param outputDirectory Pasta de MASMAPRG.ASM; nulo usa a pasta padrão do controlador.
+     * @throws IOException Se o fonte expandido não puder ser gravado.
+     */
+    public MacroAssemblyResult assembleWithMacros(String source, Path outputDirectory) throws IOException {
+        return new MacroAssembler().assemble(source, outputDirectory != null ? outputDirectory : macroOutputDirectory);
+    }
+
+    /** Pasta onde MASMAPRG.ASM é gravado quando o fonte não está associado a um arquivo. */
+    public Path getMacroOutputDirectory() { return macroOutputDirectory; }
+
+    public void setMacroOutputDirectory(Path directory) { this.macroOutputDirectory = directory; }
 
     /**
      * Interrompe a execução contínua e executa exatamente uma instrução.

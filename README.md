@@ -44,4 +44,8 @@ O projeto também inclui um montador SIC/XE de duas passagens, integrado à máq
 
 O resumo do funcionamento, das estruturas e dos comandos do montador está ao final da [documentação do sistema](docs/DOCUMENTATION.md#8-montador-e-carregador-segunda-etapa).
 
+## Processador de Macros (Terceira Etapa)
+
+Antes de montar, o fonte passa pelo processador de macros (uma passagem, com definições e chamadas aninhadas). O fonte expandido é gravado em `MASMAPRG.ASM` e só então montado. Na interface, use **Montar** normalmente; pelo terminal: `java -cp target/classes assembler.AssemblerCli test-programs/macros.asm`. Exemplo em `test-programs/macros.asm`; detalhes na [seção 9 da documentação](docs/DOCUMENTATION.md#9-processador-de-macros-terceira-etapa).
+
 No Windows, `executar.cmd` abre a aplicação. Se o Maven não estiver no PATH, use `.\maven.cmd` no lugar de `mvn` nos comandos acima. Para gerar um JAR executável, use `mvn package` e execute `java -jar target/sicxe-simulator-1.0-SNAPSHOT.jar`.

@@ -1,6 +1,8 @@
 package view;
 
 import assembler.AssemblyResult;
+import assembler.MacroAssembler;
+import assembler.MacroAssemblyResult;
 import assembler.ObjectProgram;
 import controller.MachineController;
 import javax.swing.*;
@@ -25,6 +27,8 @@ public final class AssemblerPanel extends JPanel {
     private final JTextArea listing = createTextArea(false);
     private final JTextArea object = createTextArea(false);
     private final JTextArea diagnostics = createTextArea(false);
+    private final JTextArea expanded = createTextArea(false);
+    private final JTextArea macros = createTextArea(false);
     private final JLabel status = new JLabel("Abra um arquivo ou edite o exemplo e clique em Montar.");
     private final JButton assemble = new JButton("Montar");
     private final JButton load = new JButton("Carregar na VM");
@@ -66,6 +70,8 @@ public final class AssemblerPanel extends JPanel {
         output.addTab("Listagem e símbolos", new JScrollPane(listing));
         output.addTab("Objeto", new JScrollPane(object));
         output.addTab("Erros", new JScrollPane(diagnostics));
+        output.addTab("Fonte expandido (" + MacroAssembler.EXPANDED_FILE_NAME + ")", new JScrollPane(expanded));
+        output.addTab("Macros (NAMTAB/DEFTAB)", new JScrollPane(macros));
         JScrollPane editor = new JScrollPane(source);
         editor.setBorder(BorderFactory.createTitledBorder("Fonte assembly"));
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, editor, output);
@@ -133,6 +139,8 @@ public final class AssemblerPanel extends JPanel {
         listing.setText("");
         object.setText("");
         diagnostics.setText("");
+        expanded.setText("");
+        macros.setText("");
         status.setText("Fonte alterado. Monte novamente para carregar ou exportar.");
     }
 
@@ -146,20 +154,22 @@ public final class AssemblerPanel extends JPanel {
     }
 
     /**
-     * Executa as duas passagens em segundo plano e atualiza a View ao concluir.
+     * Expande as macros e executa as duas passagens em segundo plano; atualiza a View ao concluir.
+     * O fonte expandido é gravado em MASMAPRG.ASM, na pasta do fonte aberto ou na pasta padrão do controlador.
      */
     private void assemble() {
         String text = source.getText();
+        Path directory = sourcePath == null ? null : sourcePath.toAbsolutePath().getParent();
         long version = revision;
         result = null;
         updateButtons();
         assemble.setEnabled(false);
         status.setText("Montando...");
-        new SwingWorker<AssemblyResult, Void>() {
+        new SwingWorker<MacroAssemblyResult, Void>() {
 
             @Override
-            protected AssemblyResult doInBackground() {
-                return controller.assemble(text);
+            protected MacroAssemblyResult doInBackground() throws Exception {
+                return controller.assembleWithMacros(text, directory);
             }
 
             @Override
@@ -170,15 +180,22 @@ public final class AssemblerPanel extends JPanel {
                     return;
                 }
                 try {
-                    result = get();
+                    MacroAssemblyResult macroResult = get();
+                    result = macroResult.getAssembly();
+                    expanded.setText(macroResult.getExpandedSource());
+                    macros.setText(macroResult.getExpansion().getTables());
                     listing.setText(result.getListing());
                     object.setText(result.getObjectCode());
                     diagnostics.setText(result.getDiagnostics().stream().map(Object::toString)
                             .collect(java.util.stream.Collectors.joining("\n")));
                     if (result.isSuccess()) {
-                        status.setText(
-                                String.format("Montagem concluída. %d bytes; entrada %06X. Pronto para carregar.",
-                                        result.getProgram().getLength(), result.getProgram().getEntryPoint()));
+                        status.setText(String.format(
+                                "Montagem concluída. %d bytes; entrada %06X. Pronto para carregar. Fonte expandido: %s.",
+                                result.getProgram().getLength(), result.getProgram().getEntryPoint(),
+                                macroResult.getExpandedFile()));
+                    } else if (!macroResult.getExpansion().isSuccess()) {
+                        status.setText("Expansão de macros falhou: " + result.getDiagnostics().size()
+                                + " erro(s). Consulte Erros.");
                     } else {
                         status.setText("Montagem falhou: " + result.getDiagnostics().size()
                                 + " erro(s). Consulte Erros e Listagem.");
@@ -186,6 +203,8 @@ public final class AssemblerPanel extends JPanel {
                     listing.setCaretPosition(0);
                     object.setCaretPosition(0);
                     diagnostics.setCaretPosition(0);
+                    expanded.setCaretPosition(0);
+                    macros.setCaretPosition(0);
                     updateButtons();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
